@@ -138,7 +138,7 @@ export function Tracker({ jobs: initialJobs, demo = false, loadFailed = false, c
           <div className="tracker-identity">
             <div className="app-mark"><BriefcaseBusiness size={23} strokeWidth={1.75} aria-hidden="true" /></div>
             <div>
-              <h1>Talent Acquisition Tracker</h1>
+              <h1>JobTracker</h1>
               <p className="tracker-meta">{loadFailed ? 'Your job applications' : `${jobs.length} ${jobs.length === 1 ? 'job' : 'jobs'} tracked`}
                 {demo && <span className="sample-label">Sample data</span>}
               </p>

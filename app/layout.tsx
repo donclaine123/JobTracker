@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Talent Acquisition Tracker',
+  title: 'JobTracker',
   description: 'Track job applications, interviews, and follow-ups in one private workspace.',
 };
 

@@ -1,4 +1,4 @@
-# Talent Acquisition Tracker
+# JobTracker
 
 A private job application tracker built with Next.js, Tailwind CSS, and Supabase. The signed-out view shows fictional sample jobs. Sign in to add applications and edit cells directly in the table. Press Enter or Tab to save a cell, or Esc to cancel. Use the row’s **Job details** button to edit notes or delete the job.
 
