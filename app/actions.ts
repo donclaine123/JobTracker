@@ -112,7 +112,8 @@ export async function authenticate(mode: 'sign-in' | 'sign-up', form: FormData) 
     if (error) return { error: error.status === 429 ? rateLimit : invalidSignIn };
   }
 
-  redirect('/');
+  revalidatePath('/');
+  return { signedIn: true };
 }
 
 export async function claimUsername(form: FormData) {

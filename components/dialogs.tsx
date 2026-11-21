@@ -59,7 +59,9 @@ export function AuthDialog({ onClose }: { onClose: () => void }) {
     setResult({});
     startTransition(async () => {
       try {
-        setResult(await authenticate(mode, data) ?? {});
+        const response = await authenticate(mode, data);
+        if (response.signedIn) dialog.current?.close();
+        else setResult(response);
       } catch {
         setResult({ error: 'Could not reach the tracker. Try again.' });
       }
