@@ -114,9 +114,17 @@ button:disabled { cursor: default; opacity: .56; }
 .filter-panel { display: flex; flex-wrap: wrap; align-items: end; gap: 10px 13px; }
 .filter-panel label { flex: 1 1 135px; max-width: 240px; }
 
-.table-card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
-.table-scroll { overflow: auto; border-radius: inherit; }
-.job-table { width: 100%; min-width: 1190px; table-layout: fixed; border-collapse: separate; border-spacing: 0; }
+.table-card { min-inline-size: 0; max-inline-size: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+.table-scroll {
+  position: relative;
+  inline-size: 100%;
+  min-inline-size: 0;
+  contain: inline-size;
+  overflow: auto;
+  border-radius: inherit;
+}
+.table-scroll-hint { display: none; }
+.job-table { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0; }
 .job-table thead { background: #eeeef1; }
 .job-table thead th { padding: 0; text-align: left; }
 .column-sort {
@@ -157,7 +165,7 @@ button:disabled { cursor: default; opacity: .56; }
 .job-table tbody .experience-cell { font-size: .81rem; }
 .job-table .date-cell { white-space: nowrap; }
 .edit-hint { padding: 8px 14px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: .81rem; }
-.edit-hint + .table-scroll { border-top-left-radius: 0; border-top-right-radius: 0; }
+.edit-hint ~ .table-scroll { border-top-left-radius: 0; border-top-right-radius: 0; }
 .inline-cell { position: relative; min-width: 0; }
 .inline-cell[aria-busy='true'] { opacity: .65; }
 .cell-trigger, .cell-choice {
@@ -209,6 +217,7 @@ button:disabled { cursor: default; opacity: .56; }
   font-weight: 700;
   font-size: .75rem;
   line-height: 1.25;
+  white-space: nowrap;
 }
 .posting-link { display: inline-flex; align-items: center; gap: 4px; color: #50438e; font-size: .81rem; font-weight: 600; }
 .posting-link:hover { text-decoration: underline; text-underline-offset: 3px; }
@@ -275,23 +284,38 @@ button:disabled { cursor: default; opacity: .56; }
 .field-hint { color: var(--muted); font-size: .81rem; font-weight: 400; }
 .text-button { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; font-weight: 700; }
 
-@media (max-width: 820px) {
+@media (max-width: 1024px) {
   .page-shell { padding-top: 23px; }
   .header-row { align-items: flex-start; flex-direction: column; gap: 14px; }
   .status-row { margin-top: 10px; }
-  .job-table tbody th, .job-table thead th:first-child { position: sticky; z-index: 1; left: 0; background: inherit; box-shadow: 1px 0 0 var(--line); }
+  .tracker-controls .button, .status-filter { min-height: 44px; }
+  .table-scroll-hint { display: block; padding: 8px 14px; color: var(--muted); font-size: .81rem; }
+  .table-scroll { max-width: 100%; border-top-left-radius: 0; border-top-right-radius: 0; scroll-padding-inline-start: 155px; }
   .job-table thead tr { background: #eeeef1; }
+  .job-table :is(thead th:first-child, tbody th) {
+    position: sticky;
+    inset-inline-start: 0;
+    z-index: 1;
+    background: inherit;
+    box-shadow: 1px 0 0 var(--line);
+  }
+  .job-table tbody :is(td, th) { padding-block: 5px; }
+  .job-actions-cell .icon-button { width: 44px; height: 44px; }
+  .cell-trigger, .cell-choice, .posting-actions .posting-link { min-height: 44px; }
+  .cell-editor { min-height: 44px; font-size: 1rem; }
 }
 
 @media (max-width: 460px) {
   .app-mark { width: 37px; height: 37px; }
   .tracker-identity { gap: 9px; }
   .tracker-controls { gap: 5px; }
-  .tracker-controls .button { padding-inline: 7px; min-height: 42px; }
+  .tracker-controls .button { padding-inline: 8px; }
   .account-control { margin-left: 2px; padding-left: 4px; }
   .account-control svg { display: none; }
   .status-row { gap: 3px; }
   .status-filter { padding-inline: 5px; }
   .modal-form, .modal-header { padding-inline: 15px; }
+  .form-grid { grid-template-columns: minmax(0, 1fr); }
+  .modal-header .icon-button, .modal-form .button { min-height: 44px; }
   .modal-form :is(input, select, textarea), .search-box input, .cell-editor { font-size: 1rem; }
 }

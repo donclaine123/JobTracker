@@ -17,11 +17,10 @@ export async function addApplication(form: FormData) {
   const parsed = parseApplication(form);
   if (!parsed.data) return { error: parsed.error };
 
-  const { data, error } = await session.supabase.from('applications').insert(parsed.data).select('id').maybeSingle();
+  const { data, error } = await session.supabase.from('applications').insert(parsed.data).select('id, created_at').maybeSingle();
   if (error || !data) return { error: 'The job could not be saved. Try again.' };
 
-  revalidatePath('/');
-  return { message: 'Job added.' };
+  return { message: 'Job added.', change: { kind: 'add' as const, job: { ...parsed.data, ...data } } };
 }
 
 export async function updateApplicationCell(id: string, field: string, value: string) {
@@ -37,8 +36,7 @@ export async function updateApplicationCell(id: string, field: string, value: st
   if (error) return { error: 'This change could not be saved. Try again.' };
   if (!data) return { error: 'This job could not be found. Refresh the tracker and try again.' };
 
-  revalidatePath('/');
-  return { message: 'Change saved.' };
+  return { message: 'Change saved.', change: { kind: 'update' as const, id, fields: parsed.data } };
 }
 
 export async function deleteApplication(id: string) {
@@ -50,8 +48,7 @@ export async function deleteApplication(id: string) {
     .delete().eq('id', id).eq('user_id', session.userId).select('id').maybeSingle();
   if (error || !data) return { error: 'The job could not be deleted. Refresh the tracker and try again.' };
 
-  revalidatePath('/');
-  return { message: 'Job deleted.' };
+  return { message: 'Job deleted.', change: { kind: 'delete' as const, id } };
 }
 
 async function lookupUsername(username: string) {

@@ -4,7 +4,7 @@ import { BriefcaseBusiness, Trash2, X } from 'lucide-react';
 import { useEffect, useRef, useState, useTransition, type FormEvent, type ReactNode, type RefObject } from 'react';
 import { addApplication, authenticate, claimUsername, deleteApplication, updateApplicationCell } from '@/app/actions';
 import { usernameHint, usernamePattern } from '@/lib/accounts';
-import { limits, setupLabels, statusLabels, statuses, workSetups, type Application } from '@/lib/applications';
+import { limits, setupLabels, statusLabels, statuses, workSetups, type Application, type JobChange } from '@/lib/applications';
 
 function Modal({ title, description, busy, dialogRef, onClose, children }: {
   title: string; description?: string; busy: boolean; dialogRef: RefObject<HTMLDialogElement | null>;
@@ -131,21 +131,21 @@ export function UsernameDialog({ onClose, onSave }: { onClose: () => void; onSav
 }
 
 export function JobDialog({ job, onClose, onSave }: {
-  job: Application | null; onClose: () => void; onSave: (message: string) => void;
+  job: Application | null; onClose: () => void; onSave: (change: JobChange, message: string) => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [error, setError] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [pending, startTransition] = useTransition();
 
-  function run(operation: () => Promise<{ message?: string; error?: string }>) {
+  function run(operation: () => Promise<{ message?: string; error?: string; change?: JobChange }>) {
     setError('');
     startTransition(async () => {
       try {
         const result = await operation();
         if (result.error) setError(result.error);
-        if (result.message) {
-          onSave(result.message);
+        if (result.change && result.message) {
+          onSave(result.change, result.message);
           dialog.current?.close();
         }
       } catch {

@@ -1,19 +1,19 @@
 'use client';
 
 import { ChevronDown } from 'lucide-react';
-import { useLayoutEffect, useRef, useState, useTransition, type ReactNode } from 'react';
-import { updateApplicationCell } from '@/app/actions';
-import { limits, setupLabels, statusLabels, statuses, workSetups, type SortKey } from '@/lib/applications';
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { limits, setupLabels, statusLabels, statuses, workSetups, type CellEdit, type SortKey } from '@/lib/applications';
 
 type FailedEdit = { message: string; value: string };
 
-export function InlineCell({ jobId, label, field, value, children }: {
-  jobId: string; label: string; field: SortKey; value: string | null; children: ReactNode;
+export function InlineCell({ label, field, value, edit, onSave, onDiscard, children }: {
+  label: string; field: SortKey; value: string | null; edit?: CellEdit;
+  onSave: (value: string) => void; onDiscard: () => void; children: ReactNode;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
-  const [failure, setFailure] = useState<FailedEdit | null>(null);
-  const [saving, setSaving] = useState<string | null>(null);
-  const [, startTransition] = useTransition();
+  const [dateError, setDateError] = useState<FailedEdit | null>(null);
+  const failure = dateError ?? (edit?.error ? edit : null);
+  const saving = Boolean(edit?.fields);
   const trigger = useRef<HTMLButtonElement>(null);
   const editor = useRef<HTMLInputElement>(null);
   const closed = useRef(false);
@@ -38,21 +38,10 @@ export function InlineCell({ jobId, label, field, value, children }: {
   }, [isDate, isEditing]);
 
   function save(next: string) {
-    if (saving !== null) return;
-    setFailure(null);
-    if (next.trim() === (value ?? '')) return;
-
-    setSaving(next);
-    startTransition(async () => {
-      try {
-        const result = await updateApplicationCell(jobId, field, next);
-        if (result.error) setFailure({ message: result.error, value: next });
-      } catch {
-        setFailure({ message: 'Could not save. Try again.', value: next });
-      } finally {
-        setSaving(null);
-      }
-    });
+    if (saving) return;
+    setDateError(null);
+    if (next.trim() === (value ?? '')) onDiscard();
+    else onSave(next);
   }
 
   function close(input: HTMLInputElement | null, restoreFocus = false) {
@@ -60,9 +49,10 @@ export function InlineCell({ jobId, label, field, value, children }: {
     closed.current = true;
 
     if (!input) {
-      setFailure(null);
+      setDateError(null);
+      onDiscard();
     } else if (input.validity.badInput || input.validity.rangeOverflow) {
-      setFailure({ message: 'Enter a valid date.', value: input.value });
+      setDateError({ message: 'Enter a valid date.', value: input.value });
     } else {
       save(input.value);
     }
@@ -71,12 +61,13 @@ export function InlineCell({ jobId, label, field, value, children }: {
     setDraft(null);
   }
 
-  const error = failure && <span className="cell-error" role="alert">{failure.message}</span>;
+  const message = dateError?.message ?? edit?.error;
+  const error = message && <span className="cell-error" role="alert">{message}</span>;
   if (field === 'status' || field === 'work_setup') {
-    return <div className="inline-cell" aria-busy={saving !== null && !failure}>
+    return <div className="inline-cell" aria-busy={saving}>
       <div className="cell-choice">
         <span aria-hidden="true">{children}</span><ChevronDown size={12} aria-hidden="true" />
-        <select aria-label={label} value={saving ?? value ?? ''} aria-disabled={saving !== null || undefined}
+        <select aria-label={label} value={value ?? ''} aria-disabled={saving || undefined}
           onChange={event => save(event.target.value)}>
           {field === 'status' ? statuses.map(status => <option key={status} value={status}>{statusLabels[status]}</option>) : <>
             <option value="">Not specified</option>
@@ -88,12 +79,12 @@ export function InlineCell({ jobId, label, field, value, children }: {
     </div>;
   }
 
-  return <div className="inline-cell" aria-busy={saving !== null && !failure}>
+  return <div className="inline-cell" aria-busy={saving}>
     <button ref={trigger} type="button" className="cell-trigger" aria-label={label} aria-expanded={isEditing}
       aria-description={value || 'Blank'}
-      tabIndex={isEditing ? -1 : undefined} aria-disabled={saving !== null || undefined}
+      tabIndex={isEditing ? -1 : undefined} aria-disabled={saving || undefined}
       onClick={event => {
-        if (saving !== null || isEditing) return;
+        if (saving || isEditing) return;
         closed.current = false;
         openPicker.current = event.detail > 0;
         setDraft(failure?.value ?? value ?? '');

@@ -28,6 +28,22 @@ export type ApplicationDetails = {
 };
 
 export type Application = ApplicationDetails & { id: string; created_at: string };
+export type JobChange =
+  | { kind: 'add'; job: Application }
+  | { kind: 'update'; id: string; fields: Partial<ApplicationDetails> }
+  | { kind: 'delete'; id: string };
+export type CellEdit = { id: string } & (
+  { fields: Partial<ApplicationDetails>; error?: never } | { error: string; value: string; fields?: never }
+);
+
+export function applyJobChange(jobs: Application[], change: JobChange): Application[] {
+  switch (change.kind) {
+    case 'add': return [change.job, ...jobs.filter(job => job.id !== change.job.id)];
+    case 'update': return jobs.map(job => job.id === change.id ? { ...job, ...change.fields } : job);
+    case 'delete': return jobs.filter(job => job.id !== change.id);
+  }
+}
+
 export type Filters = { query: string; status: Status | ''; setup: WorkSetup | 'unspecified' | ''; source: string };
 export type SortKey = Exclude<keyof ApplicationDetails, 'notes'>;
 export type Sort = { key: SortKey; direction: 'asc' | 'desc' } | null;

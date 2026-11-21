@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { parseApplication, parseApplicationPatch, selectApplications } from '../lib/applications.ts';
+import { applyJobChange, parseApplication, parseApplicationPatch, selectApplications } from '../lib/applications.ts';
 
 const form = (fields) => {
   const data = new FormData();
@@ -62,4 +62,18 @@ test('search and filters combine, with dates sorted and missing values always la
   const sort = { key: 'applied_on', direction: 'desc' };
   assert.deepEqual(selectApplications(jobs, filters, sort).map(job => job.id), ['2', '3', '1']);
   assert.deepEqual(selectApplications(jobs, filters, { ...sort, direction: 'asc' }).map(job => job.id), ['3', '2', '1']);
+});
+
+test('dropping an unsuccessful status edit preserves a concurrent saved field', () => {
+  const jobs = [{ id: '1', status: 'saved', location: 'Manila' }];
+  const statusEdit = { kind: 'update', id: '1', fields: { status: 'interview' } };
+  const savedLocation = applyJobChange(jobs, { kind: 'update', id: '1', fields: { location: 'Pasig' } });
+  assert.deepEqual(applyJobChange(savedLocation, statusEdit), [{ id: '1', status: 'interview', location: 'Pasig' }]);
+  assert.deepEqual(savedLocation, [{ id: '1', status: 'saved', location: 'Pasig' }]);
+});
+
+test('a late edit does not bring back a deleted job', () => {
+  const jobs = [{ id: '1', status: 'saved' }];
+  const afterDelete = applyJobChange(jobs, { kind: 'delete', id: '1' });
+  assert.deepEqual(applyJobChange(afterDelete, { kind: 'update', id: '1', fields: { status: 'applied' } }), []);
 });

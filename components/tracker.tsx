@@ -1,18 +1,21 @@
 'use client';
 
 import { AtSign, BriefcaseBusiness, Check, CircleAlert, ListFilter, LogIn, LogOut, Plus, Search, X } from 'lucide-react';
-import { useEffect, useRef, useState, useTransition } from 'react';
-import { signOut } from '@/app/actions';
-import { selectApplications, setupLabels, statusLabels, statuses, workSetups, type Application, type Filters, type Sort, type SortKey } from '@/lib/applications';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { signOut, updateApplicationCell } from '@/app/actions';
+import { applyJobChange, parseApplicationPatch, selectApplications, setupLabels, statusLabels, statuses, workSetups, type Application, type CellEdit, type Filters, type JobChange, type Sort, type SortKey } from '@/lib/applications';
 import { AuthDialog, JobDialog, UsernameDialog } from './dialogs';
 import { JobTable } from './job-table';
 
 const emptyFilters: Filters = { query: '', status: '', setup: '', source: '' };
 const addedDate = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 
-export function Tracker({ jobs, demo = false, loadFailed = false, confirmationFailed = false, canSetUsername = false }: {
+export function Tracker({ jobs: initialJobs, demo = false, loadFailed = false, confirmationFailed = false, canSetUsername = false }: {
   jobs: Application[]; demo?: boolean; loadFailed?: boolean; confirmationFailed?: boolean; canSetUsername?: boolean;
 }) {
+  const [savedJobs, setSavedJobs] = useState(initialJobs);
+  const [edits, setEdits] = useState<ReadonlyMap<string, CellEdit>>(() => new Map());
+  const savingCells = useRef(new Set<string>());
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [sort, setSort] = useState<Sort>(null);
   const [showSearch, setShowSearch] = useState(false);
@@ -26,20 +29,87 @@ export function Tracker({ jobs, demo = false, loadFailed = false, confirmationFa
 
   useEffect(() => { if (showSearch) searchInput.current?.focus(); }, [showSearch]);
 
-  const activeFilters = [filters.status, filters.setup, filters.source].filter(Boolean).length;
-  const filtered = selectApplications(jobs, filters, sort);
-  const sources = [...new Set(jobs.flatMap(job => job.source ? [job.source] : []))].sort();
+  const { status, setup, source } = filters;
+  const query = useDeferredValue(filters.query);
+  const jobs = useMemo(() => {
+    let visible = savedJobs;
+    for (const edit of edits.values()) {
+      if (edit.fields) visible = applyJobChange(visible, { kind: 'update', id: edit.id, fields: edit.fields });
+    }
+    return visible;
+  }, [savedJobs, edits]);
+  const activeFilters = [status, setup, source].filter(Boolean).length;
+  const filtered = useMemo(() => selectApplications(jobs, { query, status, setup, source }, sort), [jobs, query, status, setup, source, sort]);
+  const sources = useMemo(() => [...new Set([source, ...jobs.map(job => job.source)])]
+    .filter((value): value is string => Boolean(value)).sort(), [jobs, source]);
+  const counts = useMemo(() => {
+    const counts = { saved: 0, applied: 0, interview: 0, offer: 0, rejected: 0 };
+    for (const job of jobs) counts[job.status]++;
+    return counts;
+  }, [jobs]);
+  const hiddenError = [...edits.values()].find(edit => edit.error && !filtered.some(job => job.id === edit.id));
+
+  const clearEdit = useCallback((id: string, field: SortKey) => {
+    const key = `${id}:${field}`;
+    setEdits(previous => {
+      if (!previous.has(key)) return previous;
+      const next = new Map(previous);
+      next.delete(key);
+      return next;
+    });
+  }, []);
+
+  const saveCell = useCallback(async (id: string, field: SortKey, value: string) => {
+    const key = `${id}:${field}`;
+    if (savingCells.current.has(key)) return;
+
+    const parsed = parseApplicationPatch(field, value);
+    if (!parsed.data) {
+      setEdits(previous => new Map(previous).set(key, { id, value, error: parsed.error }));
+      return;
+    }
+
+    const fields = parsed.data;
+    savingCells.current.add(key);
+    setEdits(previous => new Map(previous).set(key, { id, fields }));
+    function fail(error: string) {
+      setEdits(previous => previous.has(key) ? new Map(previous).set(key, { id, value, error }) : previous);
+    }
+
+    try {
+      const result = await updateApplicationCell(id, field, value);
+      if (result.change) {
+        const change = result.change;
+        setSavedJobs(previous => applyJobChange(previous, change));
+        clearEdit(id, field);
+      } else {
+        fail(result.error);
+      }
+    } catch {
+      fail('Could not save. Try again.');
+    } finally {
+      savingCells.current.delete(key);
+    }
+  }, [clearEdit]);
+
+  function saveJob(change: JobChange, message: string) {
+    setSavedJobs(previous => applyJobChange(previous, change));
+    if (change.kind === 'delete') {
+      setEdits(previous => new Map([...previous].filter(([, edit]) => edit.id !== change.id)));
+    }
+    setNotice(message);
+  }
 
   function setFilter<K extends keyof Filters>(key: K, value: Filters[K]) {
     setFilters(previous => ({ ...previous, [key]: value }));
   }
 
-  function changeSort(key: SortKey) {
+  const changeSort = useCallback((key: SortKey) => {
     setSort(previous => {
       if (previous?.key !== key) return { key, direction: 'asc' };
       return previous.direction === 'asc' ? { key, direction: 'desc' } : null;
     });
-  }
+  }, []);
 
   function closeSearch() {
     setFilter('query', '');
@@ -96,13 +166,14 @@ export function Tracker({ jobs, demo = false, loadFailed = false, confirmationFa
           {statuses.map(status => <button type="button" className="status-filter" key={status}
             aria-pressed={filters.status === status} onClick={() => setFilter('status', filters.status === status ? '' : status)}>
             <span className="status-dot" data-status={status} aria-hidden="true" />
-            {statusLabels[status]} <span className="status-count">{jobs.filter(job => job.status === status).length}</span>
+            {statusLabels[status]} <span className="status-count">{counts[status]}</span>
           </button>)}
         </div>}
       </header>
 
       {confirmationFailed && <p className="notice error-notice" role="alert"><CircleAlert size={16} /> This confirmation link could not be verified. Open the latest link in the browser where you signed up.</p>}
       {signOutError && <p className="notice error-notice" role="alert"><CircleAlert size={16} /> {signOutError}</p>}
+      {hiddenError && <p className="notice error-notice" role="alert"><CircleAlert size={16} /> {hiddenError.error}</p>}
       {notice && <div className="notice success-notice">
         <p role="status"><Check size={16} /> {notice}</p>
         <button type="button" className="icon-button" aria-label="Dismiss notification" onClick={() => setNotice('')}><X size={16} /></button>
@@ -133,14 +204,15 @@ export function Tracker({ jobs, demo = false, loadFailed = false, confirmationFa
         </div>}
       </div>}
 
-      <section className="table-card" aria-label="Application list">
+      <section className="table-card" aria-label="Application list" aria-busy={query !== filters.query}>
         {loadFailed ? <div className="empty-state">
           <div className="empty-icon"><CircleAlert size={24} aria-hidden="true" /></div>
           <h2>Couldn’t load your jobs</h2><p>Refresh the tracker to try again.</p>
           <a className="button secondary" href="/">Reload tracker</a>
         </div> : filtered.length ? <>
           {!demo && <p className="edit-hint">Click a cell to edit. Enter or Tab saves. Esc cancels.</p>}
-          <JobTable jobs={filtered} sort={sort} onSort={changeSort} onDetails={demo ? undefined : setDialog} />
+          <JobTable jobs={filtered} edits={edits} onSaveCell={saveCell} onDiscardCell={clearEdit} sort={sort}
+            onSort={changeSort} onDetails={demo ? undefined : setDialog} />
         </>
           : <div className="empty-state">
             <div className="empty-icon">{jobs.length ? <Search size={23} aria-hidden="true" /> : <BriefcaseBusiness size={24} aria-hidden="true" />}</div>
@@ -159,7 +231,7 @@ export function Tracker({ jobs, demo = false, loadFailed = false, confirmationFa
       {demo && dialog === 'auth' && <AuthDialog onClose={() => setDialog(null)} />}
       {!demo && dialog === 'username' && <UsernameDialog onClose={() => setDialog(null)} onSave={setNotice} />}
       {!demo && dialog && dialog !== 'auth' && dialog !== 'username' && <JobDialog job={dialog === 'new' ? null : dialog}
-        onClose={() => setDialog(null)} onSave={setNotice} />}
+        onClose={() => setDialog(null)} onSave={saveJob} />}
     </main>
   );
 }
